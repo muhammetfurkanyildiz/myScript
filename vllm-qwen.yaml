@@ -1,53 +1,61 @@
+# --- DEPLOYMENT: VLLM SUNUCUSU ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-gemma # Adı güncelledik
+  name: vllm-qwen
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vllm-gemma # Etiketi güncelledik
+      app: vllm-qwen
   template:
     metadata:
       labels:
-        app: vllm-gemma # Etiketi güncelledik
+        app: vllm-qwen
     spec:
+      # Sadece 'role: qwen' etiketi olan Node'a gönder.
+      # Bu etiketi, GPU'su olan Worker Node'unuza (örneğin asker veya concon) eklemelisiniz:
+      # kubectl label node asker role=qwen
       nodeSelector:
-        role: gemma # Node Selector etiketini güncelledik
+        role: qwen 
       containers:
-        - name: vllm-gemma
+        - name: vllm-qwen
           image: vllm/vllm-openai:latest
           args:
+            # Hugging Face'deki Qwen modelini belirtir.
             - "--model"
-            - "google/gemma-2b-it" # Google'ın açık kaynaklı modeline geçtik
+            - "Qwen/Qwen2-7B-Instruct" 
             - "--port"
             - "8000"
           ports:
             - containerPort: 8000
-          # HF_TOKEN (Gemma 2B herkese açık olduğu için bu env kısmını silebiliriz)
-          # Eğer public değilse veya farklı bir model kullanıyorsanız bu Secret kısmını tutmalısınız.
-          # env:
-          #   - name: HF_TOKEN
-          #     valueFrom:
-          #       secretKeyRef:
-          #         name: hf-token
-          #         key: token
-          # GPU yoksa bu resources kısmını komple kaldır
+          
+          # Model, özel erişim gerektirdiği için Secret'tan HF Token'ı çeker.
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token # Yukarıda oluşturduğumuz Secret adı
+                  key: token
+          
+          # GPU kaynağı talebi. GPU'nuzun ve NVIDIA device plugin'in kurulu olması gerekir.
           resources:
             limits:
               nvidia.com/gpu: 1
 ---
+# --- SERVICE: KÜME İÇİ ERİŞİM NOKTASI ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-gemma-svc # Service adını güncelledik
+  name: vllm-qwen-svc
   namespace: default
 spec:
   selector:
-    app: vllm-gemma # Selector'ü güncelledik
+    app: vllm-qwen
   ports:
     - port: 8000
       targetPort: 8000
       protocol: TCP
+  # ClusterIP, küme içindeki diğer Pod'ların erişimi için sabit bir IP sağlar.
   type: ClusterIP
