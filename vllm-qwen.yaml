@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-qwen
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen
+    spec:
+      nodeSelector:
+        role: qwen            # sadece kalkan'a gitsin
+      containers:
+        - name: vllm-qwen
+          image: vllm/vllm-openai:latest
+          args:
+            - "--model"
+            - "Qwen/Qwen2-7B-Instruct"   # kullandığın Qwen modelini yaz
+            - "--port"
+            - "8000"
+          ports:
+            - containerPort: 8000
+          # public model ise bu env kısmını silebilirsin
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+          # GPU yoksa bu resources kısmını komple kaldır
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen-svc
+  namespace: default
+spec:
+  selector:
+    app: vllm-qwen
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP
